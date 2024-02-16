@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import type { Quote as QuoteType } from "./types";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Button } from "react-bootstrap";
+import { Button, Modal } from "react-bootstrap";
 import { nanoid } from "nanoid";
 
 const initial: QuoteType[] = [];
@@ -26,11 +26,14 @@ const QuoteItem = styled.div`
   padding: ${grid}px;
 `;
 
-function Quote({ quote, index, onDelete }) {
+function Quote({ quote, index, onDelete, onEdit }) {
   const handleDelete = () => {
     onDelete(quote.id);
   };
-  const handleUpdate = () => {};
+  const handleEdit = () => {
+    onEdit(quote);
+  };
+
   return (
     <Draggable draggableId={quote.id} index={index}>
       {(provided) => (
@@ -41,7 +44,7 @@ function Quote({ quote, index, onDelete }) {
           {...provided.dragHandleProps}
         >
           <QuoteItem>{quote.content}</QuoteItem>
-          <Button onClick={handleUpdate} variant="primary">
+          <Button onClick={handleEdit} variant="primary">
             Düzenle
           </Button>
           <Button onClick={handleDelete} variant="danger">
@@ -55,20 +58,53 @@ function Quote({ quote, index, onDelete }) {
 
 const QuoteList = React.memo(function QuoteList({
   quotes,
-  onDelete, // onDelete prop'unu doğru şekilde aldığınızdan emin olun
+  onDelete,
+  onEdit, // onDelete prop'unu doğru şekilde aldığınızdan emin olun
 }: {
   quotes: QuoteType[];
   onDelete: (quoteId: string) => void; // onDelete prop'unun tipini doğru şekilde belirtin
+  onEdit: (quote: QuoteType) => void;
 }) {
   return quotes.map((quote: QuoteType, index: number) => (
-    <Quote quote={quote} index={index} key={quote.id} onDelete={onDelete} /> // onDelete prop'unu Quote bileşenine ileterek hatayı giderin
+    <Quote
+      quote={quote}
+      index={index}
+      key={quote.id}
+      onDelete={onDelete}
+      onEdit={onEdit}
+    /> // onDelete prop'unu Quote bileşenine ileterek hatayı giderin
   ));
 });
 
 export default function QuoteApp() {
-  const [state, setState] = useState({ quotes: initial });
-
+  const [state, setState] = useState<{ quotes: QuoteType[] }>({
+    quotes: initial,
+  });
   const [quoteContent, setQuoteContent] = useState("");
+  const [show, setShow] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<QuoteType | null>(null);
+  const [modalQuoteContent, setModalQuoteContent] = useState("");
+
+  const handleShow = () => setShow(true);
+  const handleClose = () => setShow(false);
+
+  const handleEdit = (quote) => {
+    setEditingQuote(quote); // Düzenlenen quote'ı state'e kaydet
+    setModalQuoteContent(quote.content); // Düzenlenen quote'ın içeriğini input alanına yükle
+    handleShow(); // Modal'ı aç
+  };
+
+  const handleSave = () => {
+    if (editingQuote) {
+      const updatedQuotes = state.quotes.map((quote) =>
+        quote.id === editingQuote.id
+          ? { ...quote, content: modalQuoteContent }
+          : quote
+      );
+      setState({ quotes: updatedQuotes });
+    }
+    handleClose();
+  };
 
   function onDragEnd(result) {
     if (!result.destination) {
@@ -96,7 +132,12 @@ export default function QuoteApp() {
       id: nanoid(),
       content: quoteContent,
     };
-    setState((oldQuote) => ({ quotes: [...oldQuote.quotes, newQuote] }));
+    if (quoteContent !== "") {
+      setState((oldQuote) => ({ quotes: [...oldQuote.quotes, newQuote] }));
+      setQuoteContent("");
+    } else {
+      alert("Lütfen Boş Bırakmayınız");
+    }
   };
 
   // Quote Silmek İçin
@@ -109,24 +150,49 @@ export default function QuoteApp() {
   };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <Droppable droppableId="list">
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.droppableProps}>
-            <QuoteList quotes={state.quotes} onDelete={deleteQuote} />
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-      <div>
-        <input
-          type="text"
-          value={quoteContent}
-          onChange={(e) => setQuoteContent(e.target.value)}
-        />
-        <button onClick={addQuote}>Ekle</button>
-      </div>
-    </DragDropContext>
+    <>
+      <Modal show={show} onHide={handleClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Modal heading</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <input
+            type="text"
+            value={modalQuoteContent}
+            onChange={(e) => setModalQuoteContent(e.target.value)}
+            placeholder={editingQuote ? editingQuote.content : ""}
+          />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={handleSave}>
+            Kaydet
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <DragDropContext onDragEnd={onDragEnd}>
+        <Droppable droppableId="list">
+          {(provided) => (
+            <div ref={provided.innerRef} {...provided.droppableProps}>
+              <QuoteList
+                quotes={state.quotes}
+                onDelete={deleteQuote}
+                onEdit={handleEdit}
+              />
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+        <div>
+          <input
+            type="text"
+            value={quoteContent}
+            onChange={(e) => setQuoteContent(e.target.value)}
+          />
+          <button onClick={addQuote}>Ekle</button>
+        </div>
+      </DragDropContext>
+    </>
   );
 }
 
